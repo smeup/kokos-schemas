@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Kokos MCP Server tools.yaml",
+  "description": "JSON Schema for the MCP server tools DSL. Top-level keys are capability groups (e.g. 'employees', 'deliverables'), each containing a map of tool-key → ToolYaml definitions.",
+  "type": "object",
+  "additionalProperties": {
+    "description": "A capability group. Keys are arbitrary tool identifiers (snake_case by convention); values are ToolYaml definitions.",
+    "type": "object",
+    "additionalProperties": {
+      "$ref": "#/$defs/ToolYaml"
+    }
+  },
+  "$defs": {
+    "JsonNode": {
+      "description": "An arbitrary JSON object (free-form structure).",
+      "type": "object"
+    },
+    "Query": {
+      "description": "Configuration for GraphQL-based tools. When this block is present the factory creates a DefaultGraphQLToolSpec.",
+      "type": "object",
+      "properties": {
+        "graphql": {
+          "description": "Full GraphQL query string to execute against the Sme.UP GraphQL endpoint.",
+          "type": "string",
+          "examples": [
+            "query GetDeliverableList { getDeliverableList { deliverableCode deliverableDescription } }"
+          ]
+        }
+      },
+      "required": ["graphql"],
+      "additionalProperties": false
+    },
+    "Response": {
+      "description": "Controls how the raw Sme.UP response is mapped to the MCP tool result returned to the LLM client.",
+      "type": "object",
+      "properties": {
+        "format": {
+          "description": "Template for each data row/item in the response. For EXB (table) responses use '${COLUMN_NAME}' named placeholders; for GraphQL responses use printf-style '%s'. Processed by SmeupDataTableMapper.",
+          "type": "string",
+          "examples": [
+            "{\"deliverable\": %s}",
+            "{\n  \"priority_index\": \"${Indice}\",\n  \"priority_description\": \"${Significato\\nIndice}\"\n}"
+          ]
+        },
+        "error_format": {
+          "description": "Template applied when the API call fails. Supports a single printf-style '%s' placeholder that receives the raw error detail. Used for both GraphQL and FUN errors.",
+          "type": "string",
+          "examples": [
+            "{\"error\": %s}"
+          ]
+        },
+        "success_message": {
+          "description": "Human-readable message returned on successful LOA40_SI operations. Supports an optional '%s' placeholder that is substituted with the affected object's identifier.",
+          "type": "string",
+          "examples": [
+            "Email sent successfully",
+            "Oggetto '%s' modificato con successo"
+          ]
+        },
+        "error_message": {
+          "description": "Human-readable message returned when a LOA40_SI operation fails. Supports an optional '%s' placeholder for the error detail.",
+          "type": "string",
+          "examples": [
+            "Failed to send email: %s",
+            "Errore nella modifica dell'oggetto: %s"
+          ]
+        },
+        "success_result": {
+          "description": "Expected value of the 'Return\\nCode' field in a LOA40_SI response that indicates success. When present the factory selects DefaultLOA40ToolSpec and the response is validated against this value.",
+          "type": "string",
+          "examples": [
+            "*SUCCESS"
+          ]
+        },
+        "tree": {
+          "$ref": "#/$defs/Tree"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Tree": {
+      "description": "Enables hierarchical (tree) rendering for TRE-type FUN responses. When 'enabled' is true the response is processed by SmeupDataTreeMapper instead of the flat-table mapper.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Activates tree-mode rendering. Must be true for all other tree options to take effect.",
+          "type": "boolean",
+          "default": false
+        },
+        "mime_type": {
+          "description": "MIME type declared for the tree content returned to the client.",
+          "type": "string",
+          "default": "application/json",
+          "examples": [
+            "application/json"
+          ]
+        },
+        "children_field": {
+          "description": "Name of the field in each tree node that holds its child nodes.",
+          "type": "string",
+          "default": "children",
+          "examples": [
+            "children"
+          ]
+        },
+        "level_mappings": {
+          "description": "Maps each tree depth level (0-based integer key) to a set of field extraction rules. Each level object maps Sme.UP column names to the output field names ('value', 'id', 'obj', etc.). Allows different extraction logic per depth.",
+          "$ref": "#/$defs/JsonNode",
+          "examples": [
+            {
+              "0": { "value": "descrizione-azione", "Parametro oggetto": "tipo-azione", "Codice oggetto": "codice-azione" },
+              "1": { "value": "descrizione-azione", "Parametro oggetto": "tipo-azione", "Codice oggetto": "codice-azione" }
+            }
+          ]
+        }
+      },
+      "required": ["enabled"],
+      "additionalProperties": false
+    },
+    "ToolYaml": {
+      "description": "Definition of a single MCP tool. The factory auto-selects the implementation class based on which fields are present: custom 'class' → reflection instantiation; 'query.graphql' → DefaultGraphQLToolSpec; 'fun' + 'response.success_result' → DefaultLOA40ToolSpec; 'fun' only → DefaultToolSpec.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Display name exposed to the MCP client (and therefore to the LLM). Use kebab-case (e.g. 'get-deliverables-actives').",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "examples": [
+            "get-deliverables-actives",
+            "send-email",
+            "edit-smeup-object-instance"
+          ]
+        },
+        "description": {
+          "description": "Human-readable description of what the tool does. This text is passed to the LLM so it should be clear and precise to help the model decide when to invoke the tool.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "Return the list of all Sme.UP Lab deliverables currently in active state.",
+            "Modifies a Sme.UP object instance using LOA40."
+          ]
+        },
+        "schema": {
+          "description": "JSON Schema string (serialised as a YAML block scalar) defining the tool's input parameters. The 'properties' map declares each argument; 'required' lists mandatory ones. Placeholders referenced in 'fun' or 'response.format' must match property names here.",
+          "type": "string",
+          "examples": [
+            "{\n  \"type\": \"object\",\n  \"id\": \"urn:jsonschema:getDeliverables\",\n  \"properties\": {},\n  \"required\": []\n}",
+            "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"employee_code\": { \"type\": \"string\", \"description\": \"6-character employee code\" }\n  },\n  \"required\": [\"employee_code\"]\n}"
+          ]
+        },
+        "class": {
+          "description": "Fully qualified Java class name of a custom ToolSpec implementation built into the MCP server itself. IMPORTANT: this field is only meaningful when the tool definition lives inside the MCP server project, where the referenced class is on the classpath. If you are writing a tools.yaml for an external micro-executor (the common case), this field is NOT usable — the class would not be available at runtime. For custom behaviour in an external micro-executor, implement a KokosService that wraps your logic and exposes it via a FUN, then target that FUN with the 'fun' field as usual. Omit or set to 'DEFAULT' for automatic dispatch.",
+          "type": "string",
+          "examples": [
+            "com.smeup.kokos.mcp.server.toolspecs.entities.EditSmeupObjectInstanceToolSpec"
+          ]
+        },
+        "fun": {
+          "description": "Sme.UP FUN command template. Use '${paramName}' named placeholders that correspond to tool input arguments declared in 'schema'. The FUN type prefix (EXB, TRE, LOA40_SI, …) determines which response mapper is used.",
+          "type": "string",
+          "examples": [
+            "F(EXB;D5_091_07;IND.EI) 1(CF;D5DSH;${employee_code})",
+            "F(EXB;LOA40_SI;IMP.DAT) 1(${class_prefix};${class_suffix};${instance_code}) P(AziExe(02))"
+          ]
+        },
+        "query": {
+          "$ref": "#/$defs/Query"
+        },
+        "response": {
+          "$ref": "#/$defs/Response"
+        }
+      },
+      "required": ["name", "description"],
+      "additionalProperties": false
+    }
+  }
+}
