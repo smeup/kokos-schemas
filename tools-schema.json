@@ -31,26 +31,26 @@
       "additionalProperties": false
     },
     "Response": {
-      "description": "Controls how the raw Sme.UP response is mapped to the MCP tool result returned to the LLM client.",
+      "description": "Controls how the raw Sme.UP response is mapped to the MCP tool result returned to the LLM client. The 'format' field is the primary configuration point: it defines a template that is applied once per row (EXB) or per item (GraphQL) to produce the text sent to the LLM.",
       "type": "object",
       "properties": {
         "format": {
-          "description": "Template for each data row/item in the response. For EXB (table) responses use '${COLUMN_NAME}' named placeholders; for GraphQL responses use printf-style '%s'. Processed by SmeupDataTableMapper.",
+          "description": "Per-row output template applied by SmeupDataTableMapper (EXB/FUN tools) or by the GraphQL mapper.\n\nEXB tools (fun field present, no success_result):\n  Use '${COLUMN_TITLE}' named placeholders, where COLUMN_TITLE is the human-readable column title as returned by the Sme.UP backend — NOT the technical column name (e.g. use '${Descrizione}' not '${£095R_DE}'). Placeholder keys are matched case-sensitively against the 'title' field of each column in the response.\n  Multi-line titles (containing a real newline) must be written with the literal two-character sequence '\\n' in the YAML scalar (e.g. '${Data\\nFine\\nprevista}' for a title that spans three lines). The mapper normalises these before lookup.\n  If a placeholder does not match any column title, the value is resolved by column name as a fallback, then replaced with an empty string if still not found.\n  When no 'format' is set, the mapper emits one 'Title: value' line per column (default formatting).\n\nGraphQL tools (query.graphql field present):\n  Use a printf-style '%s' placeholder; the entire raw GraphQL response item is interpolated at that position.",
           "type": "string",
           "examples": [
             "{\"deliverable\": %s}",
-            "{\n  \"priority_index\": \"${Indice}\",\n  \"priority_description\": \"${Significato\\nIndice}\"\n}"
+            "{\n  \"description\": \"${Descrizione}\",\n  \"expected_end_date\": \"${Data\\nFine\\nprevista}\",\n  \"status\": \"${Stato}\"\n}"
           ]
         },
         "error_format": {
-          "description": "Template applied when the API call fails. Supports a single printf-style '%s' placeholder that receives the raw error detail. Used for both GraphQL and FUN errors.",
+          "description": "Template applied when the API call fails. Supports a single printf-style '%s' placeholder that receives the raw error detail. Used for both GraphQL and FUN errors. If omitted, the raw error message is returned as-is.",
           "type": "string",
           "examples": [
             "{\"error\": %s}"
           ]
         },
         "success_message": {
-          "description": "Human-readable message returned on successful LOA40_SI operations. Supports an optional '%s' placeholder that is substituted with the affected object's identifier.",
+          "description": "Human-readable message returned to the LLM on successful LOA40_SI (write) operations, in place of the raw backend response. Supports an optional '%s' placeholder substituted with the affected object's identifier. Used only when 'success_result' is also set.",
           "type": "string",
           "examples": [
             "Email sent successfully",
@@ -58,7 +58,7 @@
           ]
         },
         "error_message": {
-          "description": "Human-readable message returned when a LOA40_SI operation fails. Supports an optional '%s' placeholder for the error detail.",
+          "description": "Human-readable message returned to the LLM when a LOA40_SI (write) operation fails. Supports an optional '%s' placeholder for the error detail. Used only when 'success_result' is also set.",
           "type": "string",
           "examples": [
             "Failed to send email: %s",
@@ -66,7 +66,7 @@
           ]
         },
         "success_result": {
-          "description": "Expected value of the 'Return\\nCode' field in a LOA40_SI response that indicates success. When present the factory selects DefaultLOA40ToolSpec and the response is validated against this value.",
+          "description": "Expected value of the 'Return Code' field in a LOA40_SI response that signals success (e.g. '*SUCCESS'). When this field is present the factory selects DefaultLOA40ToolSpec, which validates the backend response against this value and returns 'success_message' on match or 'error_message' otherwise. Omit for read-only EXB/GraphQL tools.",
           "type": "string",
           "examples": [
             "*SUCCESS"
