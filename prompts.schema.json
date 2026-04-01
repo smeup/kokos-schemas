@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "prompts.schema.json",
+  "title": "Prompts",
+  "description": "Schema for the prompts.yaml file used by kokos-me-node-std",
+  "type": "object",
+  "additionalProperties": {
+    "title": "PromptCategory",
+    "description": "A category grouping related prompts",
+    "type": "object",
+    "additionalProperties": {
+      "$ref": "#/$defs/Prompt"
+    }
+  },
+  "$defs": {
+    "PromptParameter": {
+      "title": "PromptParameter",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short-form parameter: just the parameter name"
+        },
+        {
+          "type": "object",
+          "description": "Long-form parameter with name, description, and required flag",
+          "required": ["name"],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Parameter name"
+            },
+            "description": {
+              "type": "string",
+              "description": "Human-readable description of the parameter",
+              "default": ""
+            },
+            "required": {
+              "type": "boolean",
+              "description": "Whether this parameter is required",
+              "default": true
+            }
+          }
+        }
+      ]
+    },
+    "Prompt": {
+      "title": "Prompt",
+      "type": "object",
+      "required": ["id", "prompt"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique identifier for the prompt"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable display name",
+          "default": ""
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Category override (defaults to the parent key)",
+          "default": ""
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The prompt template, may contain {parameter} placeholders"
+        },
+        "personaId": {
+          "type": "string",
+          "description": "ID of the persona to use for this prompt",
+          "default": "default"
+        },
+        "parameters": {
+          "type": "array",
+          "description": "List of parameters referenced in the prompt template",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PromptParameter"
+          }
+        }
+      }
+    }
+  }
+}
