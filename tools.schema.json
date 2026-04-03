@@ -35,7 +35,7 @@
       "type": "object",
       "properties": {
         "format": {
-          "description": "Per-row output template applied by SmeupDataTableMapper (EXB/FUN tools) or by the GraphQL mapper.\n\nEXB tools (fun field present, no success_result):\n  Use '${COLUMN_TITLE}' named placeholders, where COLUMN_TITLE is the human-readable column title as returned by the Sme.UP backend — NOT the technical column name (e.g. use '${Descrizione}' not '${£095R_DE}'). Placeholder keys are matched case-sensitively against the 'title' field of each column in the response.\n  Multi-line titles (containing a real newline) must be written with the literal two-character sequence '\\n' in the YAML scalar (e.g. '${Data\\nFine\\nprevista}' for a title that spans three lines). The mapper normalises these before lookup.\n  If a placeholder does not match any column title, the value is resolved by column name as a fallback, then replaced with an empty string if still not found.\n  When no 'format' is set, the mapper emits one 'Title: value' line per column (default formatting).\n\nGraphQL tools (query.graphql field present):\n  Use a printf-style '%s' placeholder; the entire raw GraphQL response item is interpolated at that position.",
+          "description": "Per-row output template applied by SmeupDataTableMapper (EXB/FUN tools) or by the GraphQL mapper.\n\nEXB tools (fun field present):\n  Use '${COLUMN_TITLE}' named placeholders, where COLUMN_TITLE is the human-readable column title as returned by the Sme.UP backend — NOT the technical column name (e.g. use '${Descrizione}' not '${£095R_DE}'). Placeholder keys are matched case-sensitively against the 'title' field of each column in the response.\n  Multi-line titles (containing a real newline) must be written with the literal two-character sequence '\\n' in the YAML scalar (e.g. '${Data\\nFine\\nprevista}' for a title that spans three lines). The mapper normalises these before lookup.\n  If a placeholder does not match any column title, the value is resolved by column name as a fallback, then replaced with an empty string if still not found.\n  When no 'format' is set, the mapper emits one 'Title: value' line per column (default formatting).\n\nGraphQL tools (query.graphql field present):\n  Use a printf-style '%s' placeholder; the entire raw GraphQL response item is interpolated at that position.",
           "type": "string",
           "examples": [
             "{\"deliverable\": %s}",
@@ -50,26 +50,19 @@
           ]
         },
         "success_message": {
-          "description": "Human-readable message returned to the LLM on successful LOA40_SI (write) operations, in place of the raw backend response. Supports an optional '%s' placeholder substituted with the affected object's identifier. Used only when 'success_result' is also set.",
+          "description": "Human-readable message returned to the LLM when no messages are present in the FBK response. Used as a fallback by SmeupFeedbackMapper.",
           "type": "string",
           "examples": [
             "Email sent successfully",
-            "Oggetto '%s' modificato con successo"
+            "Disk usage statistics retrieved successfully"
           ]
         },
         "error_message": {
-          "description": "Human-readable message returned to the LLM when a LOA40_SI (write) operation fails. Supports an optional '%s' placeholder for the error detail. Used only when 'success_result' is also set.",
+          "description": "Human-readable label for the error detail, available for display in tool inspectors.",
           "type": "string",
           "examples": [
             "Failed to send email: %s",
             "Errore nella modifica dell'oggetto: %s"
-          ]
-        },
-        "success_result": {
-          "description": "Expected value of the 'Return Code' field in a LOA40_SI response that signals success (e.g. '*SUCCESS'). When this field is present the factory selects DefaultLOA40ToolSpec, which validates the backend response against this value and returns 'success_message' on match or 'error_message' otherwise. Omit for read-only EXB/GraphQL tools.",
-          "type": "string",
-          "examples": [
-            "*SUCCESS"
           ]
         },
         "tree": {
@@ -108,8 +101,8 @@
           "$ref": "#/$defs/JsonNode",
           "examples": [
             {
-              "0": { "value": "descrizione-azione", "Parametro oggetto": "tipo-azione", "Codice oggetto": "codice-azione" },
-              "1": { "value": "descrizione-azione", "Parametro oggetto": "tipo-azione", "Codice oggetto": "codice-azione" }
+              "0": { "value": "descrizione-funzione", "Parametro oggetto": "tipo-funzione", "Codice oggetto": "codice-funzione" },
+              "1": { "value": "descrizione-funzione", "Parametro oggetto": "tipo-funzione", "Codice oggetto": "codice-funzione" }
             }
           ]
         }
@@ -118,7 +111,7 @@
       "additionalProperties": false
     },
     "ToolYaml": {
-      "description": "Definition of a single MCP tool. The factory auto-selects the implementation class based on which fields are present: custom 'class' → reflection instantiation; 'query.graphql' → DefaultGraphQLToolSpec; 'fun' + 'response.success_result' → DefaultLOA40ToolSpec; 'fun' only → DefaultToolSpec.",
+      "description": "Definition of a single MCP tool. The factory auto-selects the implementation class based on which fields are present: custom 'class' → reflection instantiation; 'query.graphql' → GraphQLToolSpec; 'fun' → FunToolSpec.",
       "type": "object",
       "properties": {
         "name": {
@@ -142,18 +135,13 @@
           ]
         },
         "schema": {
-          "description": "JSON Schema string (serialised as a YAML block scalar) defining the tool's input parameters. The 'properties' map declares each argument; 'required' lists mandatory ones. Placeholders referenced in 'fun' or 'response.format' must match property names here.",
-          "type": "string",
-          "examples": [
-            "{\n  \"type\": \"object\",\n  \"id\": \"urn:jsonschema:getDeliverables\",\n  \"properties\": {},\n  \"required\": []\n}",
-            "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"employee_code\": { \"type\": \"string\", \"description\": \"6-character employee code\" }\n  },\n  \"required\": [\"employee_code\"]\n}"
-          ]
+          "$ref": "https://json-schema.org/draft/2020-12/schema"
         },
         "class": {
           "description": "Fully qualified Java class name of a custom ToolSpec implementation built into the MCP server itself. IMPORTANT: this field is only meaningful when the tool definition lives inside the MCP server project, where the referenced class is on the classpath. If you are writing a tools.yaml for an external micro-executor (the common case), this field is NOT usable — the class would not be available at runtime. For custom behaviour in an external micro-executor, implement a KokosService that wraps your logic and exposes it via a FUN, then target that FUN with the 'fun' field as usual. Omit or set to 'DEFAULT' for automatic dispatch.",
           "type": "string",
           "examples": [
-            "com.smeup.kokos.mcp.server.toolspecs.entities.EditSmeupObjectInstanceToolSpec"
+            "com.example.MyCustomToolSpec"
           ]
         },
         "fun": {
