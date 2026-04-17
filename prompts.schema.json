@@ -73,9 +73,9 @@
           "minLength": 1,
           "description": "The prompt template, may contain {parameter} placeholders"
         },
-        "personaId": {
+        "specialistId": {
           "type": "string",
-          "description": "ID of the persona to use for this prompt",
+          "description": "ID of the specialist to use for this prompt",
           "default": "default"
         },
         "parameters": {
