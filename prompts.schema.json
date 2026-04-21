@@ -85,6 +85,15 @@
           "items": {
             "$ref": "#/$defs/PromptParameter"
           }
+        },
+        "requiredCapabilities": {
+          "type": "array",
+          "description": "MCP capabilities required to execute this prompt",
+          "default": [],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     }
